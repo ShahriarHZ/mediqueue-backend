@@ -8,7 +8,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
+// -------------------------------------------------------------------------
+// MIDDLEWARE CONFIGURATION
+// -------------------------------------------------------------------------
 app.use(cors({
     origin: [
         'http://localhost:3000',
@@ -18,7 +20,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// MongoDB URI matching your Atlas configuration
+// -------------------------------------------------------------------------
+// MONGODB CONFIGURATION & LAZY CONNECTION POOLING
+// -------------------------------------------------------------------------
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.8fclsxk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -31,27 +35,46 @@ const client = new MongoClient(uri, {
 
 // Global collection pointers accessible by all routes
 let tutorCollection, bookingCollection, userCollection;
+let dbInstance = null;
 
-// Establish database connection layer safely
-async function connectDB() {
+// Safe lazy database loader to prevent function execution timeouts on Vercel
+async function getDB() {
     try {
-        if (!tutorCollection) {
-            await client.connect();
-            const db = client.db("mediQueueDB");
-            tutorCollection = db.collection("tutors");
-            bookingCollection = db.collection("bookings");
-            userCollection = db.collection("users");
-            console.log("🚀 Successfully connected to MongoDB Atlas!");
-        }
+        if (dbInstance) return dbInstance;
+        
+        await client.connect();
+        dbInstance = client.db("mediQueueDB");
+        console.log("🚀 Successfully connected to MongoDB Atlas!");
+        return dbInstance;
     } catch (error) {
         console.error("❌ Database connection error:", error);
+        throw error;
     }
 }
 
-// Middleware to ensure DB connection is ready before serving requests
+// -------------------------------------------------------------------------
+// BASE API ENDPOINTS & CONNECTIONS
+// -------------------------------------------------------------------------
+
+// Root health check route placed FIRST so Vercel can run instantly without hanging
+app.get('/', (req, res) => {
+    res.send('MediQueue Server is running beautifully.');
+});
+
+// Middleware to dynamically inject collections into active contexts safely
 app.use(async (req, res, next) => {
-    await connectDB();
-    next();
+    try {
+        const db = await getDB();
+        tutorCollection = db.collection("tutors");
+        bookingCollection = db.collection("bookings");
+        userCollection = db.collection("users");
+        next();
+    } catch (err) {
+        res.status(500).send({ 
+            error: true, 
+            message: "Database connectivity handshake timed out. Please refresh." 
+        });
+    }
 });
 
 // Custom JWT Verification Middleware
@@ -281,11 +304,9 @@ app.delete('/bookings/:id', verifyJWT, async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => {
-    res.send('MediQueue Server is running beautifully.');
-});
-
-// CRITICAL EXPORT FOR VERCEL SERVERLESS FRAMEWORK
+// -------------------------------------------------------------------------
+// LIFECYCLE METHOD EXPORTS FOR PRODUCTION SERVERLESS HANDLER
+// -------------------------------------------------------------------------
 module.exports = app;
 
 if (process.env.NODE_ENV !== 'production') {
