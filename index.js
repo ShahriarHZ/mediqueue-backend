@@ -16,15 +16,19 @@ app.use(cors({
 app.use(express.json());
 
 // 1. Unified MySQL connection pool targeting XAMPP (Forced IPv4)
+// Dynamic MySQL connection pool switching between Railway (Production) and XAMPP (Local)
 const db = mysql.createPool({
-    host: '127.0.0.1',        // Forces IPv4 loopback to bypass local DNS ::1 blocks
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'mediqueue_db',
-    port: 3306,               // Standard XAMPP port setup
+    host: process.env.DB_HOST ? process.env.DB_HOST.trim() : '127.0.0.1',
+    user: process.env.DB_USER ? process.env.DB_USER.trim() : 'root',
+    password: process.env.DB_PASSWORD ? process.env.DB_PASSWORD.trim() : '',
+    database: process.env.DB_DATABASE ? process.env.DB_DATABASE.trim() : (process.env.DB_NAME || 'mediqueue_db'),
+    port: parseInt(process.env.DB_PORT) || 3306,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    connectTimeout: 15000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000
 });
 
 // A safe connection handshake check on server load
