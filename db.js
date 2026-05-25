@@ -1,20 +1,21 @@
 const mysql = require('mysql2');
 require('dotenv').config();
 
-// Create a connection pool instead of a single connection
+const mysql = require('mysql2');
+require('dotenv').config();
+
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_DATABASE,
-  port: process.env.DB_PORT,
+  host: process.env.DB_HOST ? process.env.DB_HOST.trim() : '',
+  user: process.env.DB_USER ? process.env.DB_USER.trim() : '',
+  password: process.env.DB_PASSWORD ? process.env.DB_PASSWORD.trim() : '',
+  database: process.env.DB_DATABASE ? process.env.DB_DATABASE.trim() : '',
+  port: parseInt(process.env.DB_PORT) || 55637,
   waitForConnections: true,
-  connectionLimit: 10,       // Max simultaneous tunnels Vercel can open
+  connectionLimit: 10,
   queueLimit: 0,
-  connectTimeout: 15000,     // Gives the cloud network 15 seconds to handshake
+  connectTimeout: 15000,
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000
 });
 
-// Export the promise-based pool interface
 module.exports = pool.promise();
